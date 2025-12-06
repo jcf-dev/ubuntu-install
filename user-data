@@ -1,0 +1,88 @@
+#cloud-config
+autoinstall:
+  version: 1
+  
+  # 1. LOCALE & KEYBOARD
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+
+  # 2. IDENTITY
+  identity:
+    hostname: ubuntu
+    username: ubuntu
+    # This hash represents the password "ubuntu"
+    password: "$6$rounds=4096$idxD4q/C3/C.6$W/0vS/..k/..k/..k/.." 
+    # NOTE: If the hash above fails, use 'mkpasswd -m sha-512 ubuntu' and replace it.
+    realname: Ubuntu User
+
+  # 3. SSH SETUP
+  ssh:
+    install-server: true
+    allow-pw: true
+
+  # 4. STORAGE
+  storage:
+    layout:
+      name: lvm
+
+  # 5. SYSTEM PACKAGES (APT)
+  packages:
+    - build-essential
+    - curl
+    - wget
+    - git
+    - python3
+    - python3-pip
+    - python3-venv
+    - docker.io
+    - docker-compose-v2
+    - ca-certificates
+    - gnupg
+    # REQUIRED for JetBrains Toolbox on Ubuntu 22.04+:
+    - libfuse2 
+
+  # 6. POST-INSTALLATION SCRIPTING (Cloud-Init)
+  user-data:
+    package_upgrade: true
+    
+    # Create Docker group and add 'ubuntu' user
+    groups:
+      - docker
+    system_info:
+      default_user:
+        groups: [docker]
+
+    # Commands run on first boot
+    runcmd:
+      # --- A. VS Code (Snap) ---
+      - snap install code --classic
+
+      # --- B. NVM & Node.js ---
+      - runuser -l ubuntu -c 'curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash'
+      - runuser -l ubuntu -c 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"; nvm install --lts'
+
+      # --- C. AI CLI Tools (Claude & Gemini) ---
+      - runuser -l ubuntu -c 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"; npm install -g @anthropic-ai/claude-code'
+      - runuser -l ubuntu -c 'pip3 install google-generativeai'
+
+      # --- D. Python Poetry ---
+      # Installs to ~/.local/bin/poetry
+      - runuser -l ubuntu -c 'curl -sSL https://install.python-poetry.org | python3 -'
+      # Ensure Poetry is added to the path for the next login
+      - runuser -l ubuntu -c 'echo "export PATH=\"$HOME/.local/bin:\$PATH\"" >> $HOME/.bashrc'
+
+      # --- E. JetBrains Toolbox ---
+      # 1. Download the latest tarball to /tmp
+      - wget -qO /tmp/jetbrains-toolbox.tar.gz "https://data.services.jetbrains.com/products/download?code=TBA&platform=linux"
+      # 2. Create directory in /opt
+      - mkdir -p /opt/jetbrains-toolbox
+      # 3. Extract (stripping the versioned folder name)
+      - tar -xzf /tmp/jetbrains-toolbox.tar.gz -C /opt/jetbrains-toolbox --strip-components=1
+      # 4. Symlink the executable to /usr/local/bin so you can type 'jetbrains-toolbox' in terminal
+      - ln -s /opt/jetbrains-toolbox/jetbrains-toolbox /usr/local/bin/jetbrains-toolbox
+      # 5. Clean up
+      - rm /tmp/jetbrains-toolbox.tar.gz
+
+      # --- F. Final Log ---
+      - echo "Dev Environment Setup Complete" > /var/log/dev-setup.log
